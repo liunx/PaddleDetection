@@ -21,6 +21,7 @@
 #include <numeric>
 #include <string>
 #include <vector>
+#include <chrono>
 
 #include "include/config_parser.h"
 #include "include/keypoint_detector.h"
@@ -33,19 +34,19 @@ Json::Value RT_Config;
 void PrintBenchmarkLog(std::vector<double> det_time, int img_num) {
   std::cout << "----------------------- Config info -----------------------"
             << std::endl;
-  std::cout << "num_threads: " << RT_Config["cpu_threads"].as<int>()
+  std::cout << "num_threads: " << RT_Config["cpu_threads"].asInt()
             << std::endl;
   std::cout << "----------------------- Data info -----------------------"
             << std::endl;
-  std::cout << "batch_size_det: " << RT_Config["batch_size_det"].as<int>()
+  std::cout << "batch_size_det: " << RT_Config["batch_size_det"].asInt()
             << std::endl;
   std::cout << "----------------------- Model info -----------------------"
             << std::endl;
-  RT_Config["model_dir_det"].as<std::string>().erase(
-      RT_Config["model_dir_det"].as<std::string>().find_last_not_of("/") + 1);
+  RT_Config["model_dir_det"].asString().erase(
+      RT_Config["model_dir_det"].asString().find_last_not_of("/") + 1);
   std::cout
       << "detection model_name: "
-      << RT_Config["model_dir_det"].as<std::string>()
+      << RT_Config["model_dir_det"].asString()
       << std::endl;
   std::cout << "----------------------- Perf info ------------------------"
             << std::endl;
@@ -63,15 +64,15 @@ void PrintKptsBenchmarkLog(std::vector<double> det_time, int img_num){
   std::cout << "----------------------- Data info -----------------------"
             << std::endl;
   std::cout << "batch_size_keypoint: "
-            << RT_Config["batch_size_keypoint"].as<int>() << std::endl;
+            << RT_Config["batch_size_keypoint"].asInt() << std::endl;
   std::cout << "----------------------- Model info -----------------------"
             << std::endl;
-  RT_Config["model_dir_keypoint"].as<std::string>().erase(
-      RT_Config["model_dir_keypoint"].as<std::string>().find_last_not_of("/") +
+  RT_Config["model_dir_keypoint"].asString().erase(
+      RT_Config["model_dir_keypoint"].asString().find_last_not_of("/") +
       1);
   std::cout
       << "keypoint model_name: "
-      << RT_Config["model_dir_keypoint"].as<std::string>() << std::endl;
+      << RT_Config["model_dir_keypoint"].asString() << std::endl;
   std::cout << "----------------------- Perf info ------------------------"
             << std::endl;
   std::cout << "Total number of predicted data: " << img_num
@@ -245,7 +246,7 @@ void PredictImage(const std::vector<std::string> all_img_paths,
               keypoint_crop_time - keypoint_start_time;
           midtimecost += double(midtimediff.count() * 1000);
 
-          if (imgs_kpts.size() == RT_Config["batch_size_keypoint"].as<int>() ||
+          if (imgs_kpts.size() == RT_Config["batch_size_keypoint"].asInt() ||
               ((i == imsize - 1) && !imgs_kpts.empty())) {
             if (run_benchmark) {
               keypoint->Predict(imgs_kpts,
@@ -320,12 +321,12 @@ int main(int argc, char** argv) {
   }
   // Parsing command-line
   PaddleDetection::load_jsonf(config_path, RT_Config);
-  if (RT_Config["model_dir_det"].as<std::string>().empty()) {
+  if (RT_Config["model_dir_det"].asString().empty()) {
     std::cout << "Please set [model_det_dir] in " << config_path << std::endl;
     return -1;
   }
-  if (RT_Config["image_file"].as<std::string>().empty() &&
-      RT_Config["image_dir"].as<std::string>().empty() && img_path.empty()) {
+  if (RT_Config["image_file"].asString().empty() &&
+      RT_Config["image_dir"].asString().empty() && img_path.empty()) {
     std::cout << "Please set [image_file] or [image_dir] in " << config_path
               << " Or use command: <" << argv[0] << " [image_dir]>"
               << std::endl;
@@ -339,17 +340,17 @@ int main(int argc, char** argv) {
   }
   // Load model and create a object detector
   PaddleDetection::ObjectDetector det(
-      RT_Config["model_dir_det"].as<std::string>(),
-      RT_Config["cpu_threads"].as<int>(),
-      RT_Config["batch_size_det"].as<int>());
+      RT_Config["model_dir_det"].asString(),
+      RT_Config["cpu_threads"].asInt(),
+      RT_Config["batch_size_det"].asInt());
 
   PaddleDetection::KeyPointDetector* keypoint = nullptr;
-  if (!RT_Config["model_dir_keypoint"].as<std::string>().empty()) {
+  if (!RT_Config["model_dir_keypoint"].asString().empty()) {
     keypoint = new PaddleDetection::KeyPointDetector(
-        RT_Config["model_dir_keypoint"].as<std::string>(),
-        RT_Config["cpu_threads"].as<int>(),
-        RT_Config["batch_size_keypoint"].as<int>(),
-        RT_Config["use_dark_decode"].as<bool>());
+        RT_Config["model_dir_keypoint"].asString(),
+        RT_Config["cpu_threads"].asInt(),
+        RT_Config["batch_size_keypoint"].asInt(),
+        RT_Config["use_dark_decode"].asBool());
     RT_Config["batch_size_det"] = 1;
     printf(
         "batchsize of detection forced to be 1 while keypoint model is not "
@@ -357,33 +358,33 @@ int main(int argc, char** argv) {
   }
   // Do inference on input image
 
-  if (!RT_Config["image_file"].as<std::string>().empty() ||
-      !RT_Config["image_dir"].as<std::string>().empty()) {
-    if (!PathExists(RT_Config["output_dir"].as<std::string>())) {
-      MkDirs(RT_Config["output_dir"].as<std::string>());
+  if (!RT_Config["image_file"].asString().empty() ||
+      !RT_Config["image_dir"].asString().empty()) {
+    if (!PathExists(RT_Config["output_dir"].asString())) {
+      MkDirs(RT_Config["output_dir"].asString());
     }
     std::vector<std::string> all_img_paths;
     std::vector<cv::String> cv_all_img_paths;
-    if (!RT_Config["image_file"].as<std::string>().empty()) {
-      all_img_paths.push_back(RT_Config["image_file"].as<std::string>());
-      if (RT_Config["batch_size_det"].as<int>() > 1) {
+    if (!RT_Config["image_file"].asString().empty()) {
+      all_img_paths.push_back(RT_Config["image_file"].asString());
+      if (RT_Config["batch_size_det"].asInt() > 1) {
         std::cout << "batch_size_det should be 1, when set `image_file`."
                   << std::endl;
         return -1;
       }
     } else {
-      cv::glob(RT_Config["image_dir"].as<std::string>(), cv_all_img_paths);
+      cv::glob(RT_Config["image_dir"].asString(), cv_all_img_paths);
       for (const auto& img_path : cv_all_img_paths) {
         all_img_paths.push_back(img_path);
       }
     }
     PredictImage(all_img_paths,
-                 RT_Config["batch_size_det"].as<int>(),
-                 RT_Config["threshold_det"].as<float>(),
-                 RT_Config["run_benchmark"].as<bool>(),
+                 RT_Config["batch_size_det"].asInt(),
+                 RT_Config["threshold_det"].asFloat(),
+                 RT_Config["run_benchmark"].asBool(),
                  &det,
                  keypoint,
-                 RT_Config["output_dir"].as<std::string>());
+                 RT_Config["output_dir"].asString());
   }
   delete keypoint;
   keypoint = nullptr;

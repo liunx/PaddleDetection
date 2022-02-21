@@ -45,7 +45,7 @@ class ConfigPaser {
 
     // Get model arch : YOLO, SSD, RetinaNet, RCNN, Face
     if (config.isMember("arch")) {
-      arch_ = config["arch"].as<std::string>();
+      arch_ = config["arch"].asString();
     } else {
       std::cerr << "Please set model arch,"
                 << "support value : YOLO, SSD, RetinaNet, RCNN, Face."
@@ -55,7 +55,7 @@ class ConfigPaser {
 
     // Get draw_threshold for visualization
     if (config.isMember("draw_threshold")) {
-      draw_threshold_ = config["draw_threshold"].as<float>();
+      draw_threshold_ = config["draw_threshold"].asFloat();
     } else {
       std::cerr << "Please set draw_threshold." << std::endl;
       return false;
@@ -71,7 +71,7 @@ class ConfigPaser {
     if (config.isMember("label_list")) {
       label_list_.clear();
       for (auto item : config["label_list"]) {
-        label_list_.emplace_back(item.as<std::string>());
+        label_list_.emplace_back(item.asString());
       }
     } else {
       std::cerr << "Please set label_list." << std::endl;
@@ -86,7 +86,7 @@ class ConfigPaser {
     if (config.isMember("fpn_stride")) {
       fpn_stride_.clear();
       for (auto item : config["fpn_stride"]) {
-        fpn_stride_.emplace_back(item.as<int>());
+        fpn_stride_.emplace_back(item.asInt());
       }
     }
 

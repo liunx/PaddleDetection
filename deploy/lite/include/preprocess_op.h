@@ -62,12 +62,12 @@ class NormalizeImage : public PreprocessOp {
     mean_.clear();
     scale_.clear();
     for (auto tmp : item["mean"]) {
-      mean_.emplace_back(tmp.as<float>());
+      mean_.emplace_back(tmp.asFloat());
     }
     for (auto tmp : item["std"]) {
-      scale_.emplace_back(tmp.as<float>());
+      scale_.emplace_back(tmp.asFloat());
     }
-    is_scale_ = item["is_scale"].as<bool>();
+    is_scale_ = item["is_scale"].asBool();
   }
 
   virtual void Run(cv::Mat* im, ImageBlob* data);
@@ -88,12 +88,12 @@ class Permute : public PreprocessOp {
 class Resize : public PreprocessOp {
  public:
   virtual void Init(const Json::Value& item) {
-    interp_ = item["interp"].as<int>();
+    interp_ = item["interp"].asInt();
     // max_size_ = item["target_size"].as<int>();
-    keep_ratio_ = item["keep_ratio"].as<bool>();
+    keep_ratio_ = item["keep_ratio"].asBool();
     target_size_.clear();
     for (auto tmp : item["target_size"]) {
-      target_size_.emplace_back(tmp.as<int>());
+      target_size_.emplace_back(tmp.asInt());
     }
   }
 
@@ -113,7 +113,7 @@ class Resize : public PreprocessOp {
 class PadStride : public PreprocessOp {
  public:
   virtual void Init(const Json::Value& item) {
-    stride_ = item["stride"].as<int>();
+    stride_ = item["stride"].asInt();
   }
 
   virtual void Run(cv::Mat* im, ImageBlob* data);
@@ -127,7 +127,7 @@ class TopDownEvalAffine : public PreprocessOp {
   virtual void Init(const Json::Value& item) {
     trainsize_.clear();
     for (auto tmp : item["trainsize"]) {
-      trainsize_.emplace_back(tmp.as<int>());
+      trainsize_.emplace_back(tmp.asInt());
     }
   }
 
@@ -151,7 +151,7 @@ class Preprocessor {
     // initialize image info at first
     ops_["InitInfo"] = std::make_shared<InitInfo>();
     for (const auto& item : config_node) {
-      auto op_name = item["type"].as<std::string>();
+      auto op_name = item["type"].asString();
 
       ops_[op_name] = CreateOp(op_name);
       ops_[op_name]->Init(item);

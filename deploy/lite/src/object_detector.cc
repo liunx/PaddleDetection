@@ -287,8 +287,8 @@ void ObjectDetector::Predict(const std::vector<cv::Mat>& imgs,
     PaddleDetection::PicoDetPostProcess(
         result, output_data_list_, config_.fpn_stride_, 
         inputs_.im_shape_, inputs_.scale_factor_,
-        config_.nms_info_["score_threshold"].as<float>(), 
-        config_.nms_info_["nms_threshold"].as<float>(), num_class, reg_max);
+        config_.nms_info_["score_threshold"].asFloat(), 
+        config_.nms_info_["nms_threshold"].asFloat(), num_class, reg_max);
     bbox_num->push_back(result->size());
   } else {
     Postprocess(imgs, result, out_bbox_num_data_, is_rbox);

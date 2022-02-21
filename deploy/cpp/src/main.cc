@@ -282,7 +282,7 @@ void PredictImage(const std::vector<std::string> all_img_paths,
     bool is_rbox = false;
     if (run_benchmark) {
       det->Predict(
-          batch_imgs, threshold, 10, 10, &result, &bbox_num, &det_times);
+          batch_imgs, threshold, 10, 100, &result, &bbox_num, &det_times);
     } else {
       det->Predict(batch_imgs, threshold, 0, 1, &result, &bbox_num, &det_times);
       // get labels and colormap

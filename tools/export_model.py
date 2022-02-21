@@ -105,7 +105,7 @@ def main():
     # FIXME: Temporarily solve the priority problem of FLAGS.opt
     merge_config(FLAGS.opt)
     check_config(cfg)
-    check_gpu(cfg.use_gpu)
+    #check_gpu(cfg.use_gpu)
     check_version()
 
     run(FLAGS, cfg)

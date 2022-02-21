@@ -17,7 +17,7 @@ TENSORRT_INC_DIR=/path/to/tensorrt/include
 TENSORRT_LIB_DIR=/path/to/tensorrt/lib
 
 # Paddle 预测库路径
-PADDLE_DIR=/path/to/paddle_inference
+PADDLE_DIR=/home/liunx/Work/Robot/PaddlePaddle/InferLibrary/paddle_inference
 
 # CUDA 的 lib 路径
 CUDA_LIB=/path/to/cuda/lib
@@ -26,42 +26,14 @@ CUDA_LIB=/path/to/cuda/lib
 CUDNN_LIB=/path/to/cudnn/lib
 
 # 是否开启关键点模型预测功能
-WITH_KEYPOINT=OFF
+WITH_KEYPOINT=ON
 
 # 是否开启跟踪模型预测功能
-WITH_MOT=OFF
+WITH_MOT=ON
 
 MACHINE_TYPE=`uname -m`
 echo "MACHINE_TYPE: "${MACHINE_TYPE}
 
-
-if [ "$MACHINE_TYPE" = "x86_64" ]
-then
-  echo "set OPENCV_DIR for x86_64"
-  # linux系统通过以下命令下载预编译的opencv
-  mkdir -p $(pwd)/deps && cd $(pwd)/deps
-  wget -c https://paddledet.bj.bcebos.com/data/opencv-3.4.16_gcc8.2_ffmpeg.tar.gz
-  tar -xvf opencv-3.4.16_gcc8.2_ffmpeg.tar.gz && cd ..
-
-  # set OPENCV_DIR
-  OPENCV_DIR=$(pwd)/deps/opencv-3.4.16_gcc8.2_ffmpeg
-
-elif [ "$MACHINE_TYPE" = "aarch64" ]
-then
-  echo "set OPENCV_DIR for aarch64"
-  # TX2平台通过以下命令下载预编译的opencv
-  mkdir -p $(pwd)/deps && cd $(pwd)/deps
-  wget -c https://bj.bcebos.com/v1/paddledet/data/TX2_JetPack4.3_opencv_3.4.6_gcc7.5.0.tar.gz
-  tar -xvf TX2_JetPack4.3_opencv_3.4.6_gcc7.5.0.tar.gz && cd ..
-
-  # set OPENCV_DIR
-  OPENCV_DIR=$(pwd)/deps/TX2_JetPack4.3_opencv_3.4.6_gcc7.5.0/
-
-else
-  echo "Please set OPENCV_DIR manually"
-fi
-
-echo "OPENCV_DIR: "$OPENCV_DIR
 
 # 以下无需改动
 rm -rf build
@@ -82,5 +54,5 @@ cmake .. \
     -DWITH_KEYPOINT=${WITH_KEYPOINT} \
     -DWITH_MOT=${WITH_MOT}
 
-make
+make -j8
 echo "make finished!"

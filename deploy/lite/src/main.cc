@@ -129,6 +129,110 @@ static void MkDirs(const std::string& path) {
   MkDir(path);
 }
 
+cv::Mat Predict(cv::Mat frame,
+                const int batch_size_det,
+                const double threshold_det,
+                PaddleDetection::ObjectDetector *det,
+                PaddleDetection::KeyPointDetector *keypoint)
+{
+  int kpts_imgs = 0;
+  std::vector<cv::Mat> batch_imgs = {frame};
+  // Store all detected result
+  std::vector<PaddleDetection::ObjectResult> result;
+  std::vector<int> bbox_num;
+  std::vector<double> det_times;
+
+  // Store keypoint results
+  std::vector<PaddleDetection::KeyPointResult> result_kpts;
+  std::vector<cv::Mat> imgs_kpts;
+  std::vector<std::vector<float>> center_bs;
+  std::vector<std::vector<float>> scale_bs;
+  std::vector<int> colormap_kpts = PaddleDetection::GenerateColorMap(20);
+  bool is_rbox = false;
+  det->Predict(batch_imgs, threshold_det, 0, 1, &result, &bbox_num, &det_times);
+
+  // get labels and colormap
+  auto labels = det->GetLabelList();
+  auto colormap = PaddleDetection::GenerateColorMap(labels.size());
+  int item_start_idx = 0;
+  cv::Mat im = batch_imgs[0];
+  std::vector<PaddleDetection::ObjectResult> im_result;
+  int detect_num = 0;
+  for (int j = 0; j < bbox_num[0]; j++) {
+    PaddleDetection::ObjectResult item = result[item_start_idx + j];
+    if (item.confidence < threshold_det || item.class_id == -1) {
+      continue;
+    }
+    detect_num += 1;
+    im_result.push_back(item);
+    if (item.rect.size() > 6) {
+      is_rbox = true;
+      printf("class=%d confidence=%.4f rect=[%d %d %d %d %d %d %d %d]\n",
+              item.class_id,
+              item.confidence,
+              item.rect[0],
+              item.rect[1],
+              item.rect[2],
+              item.rect[3],
+              item.rect[4],
+              item.rect[5],
+              item.rect[6],
+              item.rect[7]);
+    } else {
+      printf("class=%d confidence=%.4f rect=[%d %d %d %d]\n",
+              item.class_id,
+              item.confidence,
+              item.rect[0],
+              item.rect[1],
+              item.rect[2],
+              item.rect[3]);
+    }
+  }
+  std::cout << " The number of detected box: " << detect_num << std::endl;
+  item_start_idx = item_start_idx + bbox_num[0];
+
+  if (keypoint) {
+    int imsize = im_result.size();
+    for (int i = 0; i < imsize; i++) {
+      auto item = im_result[i];
+      cv::Mat crop_img;
+      std::vector<double> keypoint_times;
+      std::vector<int> rect = {
+          item.rect[0], item.rect[1], item.rect[2], item.rect[3]};
+      std::vector<float> center;
+      std::vector<float> scale;
+      if (item.class_id == 0) {
+        PaddleDetection::CropImg(im, crop_img, rect, center, scale);
+        center_bs.emplace_back(center);
+        scale_bs.emplace_back(scale);
+        imgs_kpts.emplace_back(crop_img);
+        kpts_imgs += 1;
+      }
+
+      if (imgs_kpts.size() == RT_Config["batch_size_keypoint"].asInt() ||
+          ((i == imsize - 1) && !imgs_kpts.empty())) {
+        keypoint->Predict(imgs_kpts,
+                          center_bs,
+                          scale_bs,
+                          0,
+                          1,
+                          &result_kpts,
+                          &keypoint_times);
+        imgs_kpts.clear();
+        center_bs.clear();
+        scale_bs.clear();
+      }
+    }
+    cv::Mat kpts_vis_img =
+        VisualizeKptsResult(im, result_kpts, colormap_kpts, keypoint->get_threshold());
+    return kpts_vis_img;
+  } else {
+    cv::Mat vis_img =
+        PaddleDetection::VisualizeResult(im, im_result, labels, colormap, is_rbox);
+    return vis_img;
+  }
+}
+
 void PredictImage(const std::vector<std::string> all_img_paths,
                   const int batch_size_det,
                   const double threshold_det,
@@ -314,29 +418,16 @@ int main(int argc, char** argv) {
     return -1;
   }
   std::string config_path = argv[1];
-  std::string img_path = "";
+  std::string video_file = "";
     
   if (argc >= 3) {
-    img_path = argv[2];
+    video_file = argv[2];
   }
   // Parsing command-line
   PaddleDetection::load_jsonf(config_path, RT_Config);
   if (RT_Config["model_dir_det"].asString().empty()) {
     std::cout << "Please set [model_det_dir] in " << config_path << std::endl;
     return -1;
-  }
-  if (RT_Config["image_file"].asString().empty() &&
-      RT_Config["image_dir"].asString().empty() && img_path.empty()) {
-    std::cout << "Please set [image_file] or [image_dir] in " << config_path
-              << " Or use command: <" << argv[0] << " [image_dir]>"
-              << std::endl;
-    return -1;
-  }
-  if (!img_path.empty()) {
-    std::cout << "Use image_dir in command line overide the path in config file"
-              << std::endl;
-    RT_Config["image_dir"] = img_path;
-    RT_Config["image_file"] = "";
   }
   // Load model and create a object detector
   PaddleDetection::ObjectDetector det(
@@ -357,36 +448,39 @@ int main(int argc, char** argv) {
         "empty()");
   }
   // Do inference on input image
+  cv::Mat frame;
+  cv::Mat frame_lite;
+  double tt = 0;
+  double fps = 0;
+  cv::VideoCapture cap;
 
-  if (!RT_Config["image_file"].asString().empty() ||
-      !RT_Config["image_dir"].asString().empty()) {
-    if (!PathExists(RT_Config["output_dir"].asString())) {
-      MkDirs(RT_Config["output_dir"].asString());
+  cap.open(argv[2]);
+  while (true)
+  {
+    cap >> frame;
+    if (frame.empty())
+      break;
+
+    double t = cv::getTickCount();
+    cv::resize(frame, frame_lite, cv::Size(320, 240));
+    cv::Mat frame_ = Predict(frame_lite,
+                             RT_Config["batch_size_det"].asInt(),
+                             RT_Config["threshold_det"].asFloat(),
+                             &det,
+                             keypoint);
+    tt = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
+    fps = 1 / tt;
+
+    cv::putText(frame_, cv::format("FPS = %.2f", fps), cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX, 1.3, cv::Scalar(0, 0, 255), 4);
+
+    cv::imshow("PaddleLite", frame_);
+
+    int k = cv::waitKey(5);
+    if (k == 27)
+    {
+      cv::destroyAllWindows();
+      break;
     }
-    std::vector<std::string> all_img_paths;
-    std::vector<cv::String> cv_all_img_paths;
-    if (!RT_Config["image_file"].asString().empty()) {
-      all_img_paths.push_back(RT_Config["image_file"].asString());
-      if (RT_Config["batch_size_det"].asInt() > 1) {
-        std::cout << "batch_size_det should be 1, when set `image_file`."
-                  << std::endl;
-        return -1;
-      }
-    } else {
-      cv::glob(RT_Config["image_dir"].asString(), cv_all_img_paths);
-      for (const auto& img_path : cv_all_img_paths) {
-        all_img_paths.push_back(img_path);
-      }
-    }
-    PredictImage(all_img_paths,
-                 RT_Config["batch_size_det"].asInt(),
-                 RT_Config["threshold_det"].asFloat(),
-                 RT_Config["run_benchmark"].asBool(),
-                 &det,
-                 keypoint,
-                 RT_Config["output_dir"].asString());
   }
-  delete keypoint;
-  keypoint = nullptr;
   return 0;
 }

@@ -1,11 +1,11 @@
 #!/bin/bash
 
+#PADDLE_DIR=$(realpath InferLibrary/inference_lite_lib.x86)
+PADDLE_DIR=$(realpath InferLibrary/inference_lite_lib.arm)
+
 rm -rf build
 mkdir -p build
 cd build
-
-#PADDLE_DIR=${HOME}/Work/Robot/PaddlePaddle/InferLibrary/inference_lite_lib.with_log
-PADDLE_DIR=/work/PaddlePaddle/InferLibrary/paddlelite_inference
 
 cmake .. \
     -DPADDLE_DIR=${PADDLE_DIR} \

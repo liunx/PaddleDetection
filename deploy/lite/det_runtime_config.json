@@ -2,7 +2,7 @@
     "model_dir_det": "./inference_model/model",
     "batch_size_det": 1,
     "threshold_det": 0.5,
-    "image_file": "./demo/000000014439_640x640.jpg",
+    "image_file": "./demo/demo.jpg",
     "image_dir": "",
     "run_benchmark": false,
     "cpu_threads": 4

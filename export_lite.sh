@@ -1,5 +1,5 @@
 #!/bin/bash
-ARCH=arm,x86
+ARCH=arm
 MODEL_DIR=$1
 
 ./opt_linux \

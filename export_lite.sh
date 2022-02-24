@@ -1,8 +1,8 @@
 #!/bin/bash
-ARCH=arm
+ARCH=x86
 MODEL_DIR=$1
 
-./opt_linux \
+./opt \
     --valid_targets=${ARCH} \
     --model_file=${MODEL_DIR}/model.pdmodel \
     --param_file=${MODEL_DIR}/model.pdiparams \

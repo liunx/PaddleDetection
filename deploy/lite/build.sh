@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#PADDLE_DIR=$(realpath InferLibrary/inference_lite_lib.x86)
-PADDLE_DIR=$(realpath InferLibrary/inference_lite_lib.arm)
+PADDLE_DIR=$(realpath InferLibrary/inference_lite_lib.x86)
+#PADDLE_DIR=$(realpath InferLibrary/inference_lite_lib.armv8)
 
 rm -rf build
 mkdir -p build

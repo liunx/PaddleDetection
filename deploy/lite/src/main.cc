@@ -28,6 +28,7 @@
 #include "include/object_detector.h"
 #include "include/preprocess_op.h"
 #include "json/json.h"
+#include <opencv2/aruco.hpp>
 
 class PaddleLite
 {
@@ -161,6 +162,155 @@ private:
   PaddleDetection::KeyPointDetector *keypoint;
 };
 
+class Aruco
+{
+public:
+  Aruco()
+  {
+    dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
+    parameters = cv::aruco::DetectorParameters::create();
+  }
+
+  ~Aruco() {}
+
+  void Detect(cv::Mat &frame)
+  {
+    cv::aruco::detectMarkers(frame, dictionary, markerCorners, markerIds, parameters, rejectedCandidates);
+  }
+
+private:
+  std::vector<int> markerIds;
+  cv::Ptr<cv::aruco::Dictionary> dictionary;
+  std::vector<std::vector<cv::Point2f>> markerCorners, rejectedCandidates;
+  cv::Ptr<cv::aruco::DetectorParameters> parameters;
+};
+
+namespace demo {
+  using namespace std;
+  using namespace cv;
+
+  int thresh = 50, N = 11;
+  const char *wndname = "Square Detection Demo";
+
+  // helper function:
+  // finds a cosine of angle between vectors
+  // from pt0->pt1 and from pt0->pt2
+  double angle(Point pt1, Point pt2, Point pt0)
+  {
+    double dx1 = pt1.x - pt0.x;
+    double dy1 = pt1.y - pt0.y;
+    double dx2 = pt2.x - pt0.x;
+    double dy2 = pt2.y - pt0.y;
+    return (dx1 * dx2 + dy1 * dy2) / sqrt((dx1 * dx1 + dy1 * dy1) * (dx2 * dx2 + dy2 * dy2) + 1e-10);
+  }
+
+  // returns sequence of squares detected on the image.
+  void findSquares(const Mat &image, vector<vector<Point>> &squares)
+  {
+    squares.clear();
+
+    Mat pyr, timg, gray0(image.size(), CV_8U), gray;
+
+    // down-scale and upscale the image to filter out the noise
+    pyrDown(image, pyr, Size(image.cols / 2, image.rows / 2));
+    pyrUp(pyr, timg, image.size());
+    vector<vector<Point>> contours;
+
+    // find squares in every color plane of the image
+    for (int c = 0; c < 3; c++)
+    {
+      int ch[] = {c, 0};
+      mixChannels(&timg, 1, &gray0, 1, ch, 1);
+
+      // try several threshold levels
+      for (int l = 0; l < N; l++)
+      {
+        // hack: use Canny instead of zero threshold level.
+        // Canny helps to catch squares with gradient shading
+        if (l == 0)
+        {
+          // apply Canny. Take the upper threshold from slider
+          // and set the lower to 0 (which forces edges merging)
+          Canny(gray0, gray, 0, thresh, 5);
+          // dilate canny output to remove potential
+          // holes between edge segments
+          dilate(gray, gray, Mat(), Point(-1, -1));
+        }
+        else
+        {
+          // apply threshold if l!=0:
+          //     tgray(x,y) = gray(x,y) < (l+1)*255/N ? 255 : 0
+          gray = gray0 >= (l + 1) * 255 / N;
+        }
+
+        // find contours and store them all as a list
+        findContours(gray, contours, RETR_LIST, CHAIN_APPROX_SIMPLE);
+
+        vector<Point> approx;
+
+        // test each contour
+        for (size_t i = 0; i < contours.size(); i++)
+        {
+          // approximate contour with accuracy proportional
+          // to the contour perimeter
+          approxPolyDP(contours[i], approx, arcLength(contours[i], true) * 0.02, true);
+
+          // square contours should have 4 vertices after approximation
+          // relatively large area (to filter out noisy contours)
+          // and be convex.
+          // Note: absolute value of an area is used because
+          // area may be positive or negative - in accordance with the
+          // contour orientation
+          if (approx.size() == 4 &&
+              fabs(contourArea(approx)) > 1000 &&
+              isContourConvex(approx))
+          {
+            double maxCosine = 0;
+
+            for (int j = 2; j < 5; j++)
+            {
+              // find the maximum cosine of the angle between joint edges
+              double cosine = fabs(angle(approx[j % 4], approx[j - 2], approx[j - 1]));
+              maxCosine = MAX(maxCosine, cosine);
+            }
+
+            // if cosines of all angles are small
+            // (all angles are ~90 degree) then write quandrange
+            // vertices to resultant sequence
+            if (maxCosine < 0.3)
+              squares.push_back(approx);
+          }
+        }
+      }
+    }
+  }
+
+  void findLines(const Mat &image, vector<Vec2f> &lines)
+  {
+    Mat edges, gray;
+    lines.clear();
+    cvtColor(image, gray, COLOR_RGB2GRAY);
+    Canny(gray, edges, 50, 200, 3);
+    HoughLines(edges, lines, 1, CV_PI/180, 250, 0, 0); // runs the actual detection
+  }
+
+  void drawLines(const Mat &image, vector<Vec2f> &lines)
+  {
+    for (size_t i = 0; i < lines.size(); i++)
+    {
+      float r = lines[i][0], t = lines[i][1];
+      double cos_t = cos(t), sin_t = sin(t);
+      double x0 = r * cos_t, y0 = r * sin_t;
+      double alpha = 1000;
+
+      Point pt1(cvRound(x0 + alpha * (-sin_t)), cvRound(y0 + alpha * cos_t));
+      Point pt2(cvRound(x0 - alpha * (-sin_t)), cvRound(y0 - alpha * cos_t));
+      line(image, pt1, pt2, Scalar(0, 0, 255), 3, LINE_AA);
+    }
+  }
+
+};
+
 int main(int argc, char **argv)
 {
   std::string config_path = argv[1];
@@ -178,15 +328,21 @@ int main(int argc, char **argv)
     return -1;
   }
 
-  if (argc >= 3) {
+  if (argc >= 3)
+  {
     cap.open(argv[2]);
   }
-  else {
+  else
+  {
     cap.open(0);
   }
 
+  cv::Mat vis_img;
+
   PaddleLite plite;
   plite.Init(config_path);
+  Aruco aruco = Aruco();
+  int select = 2;
 
   while (true)
   {
@@ -195,10 +351,44 @@ int main(int argc, char **argv)
       break;
 
     double t = cv::getTickCount();
-    cv::resize(frame, im, cv::Size(320, 240));
-    auto colormap = PaddleDetection::GenerateColorMap(plite.labels.size());
-    im_result = plite.Detection(im);
-    cv::Mat vis_img = PaddleDetection::VisualizeResult(im, im_result, plite.labels, colormap, false);
+    cv::resize(frame, im, cv::Size(640, 480));
+
+    switch (select)
+    {
+      case 0:
+      {
+        auto colormap = PaddleDetection::GenerateColorMap(plite.labels.size());
+        im_result = plite.Detection(im);
+        vis_img = PaddleDetection::VisualizeResult(im, im_result, plite.labels, colormap, false);
+      };
+      break;
+      case 1:
+      {
+        std::vector<std::vector<cv::Point> > squares;
+        demo::findSquares(im, squares);
+        cv::polylines(im, squares, true, cv::Scalar(0, 255, 0), 3, cv::LINE_AA);
+        vis_img = im;
+      };
+      break;
+      case 2:
+      {
+        std::vector<cv::Vec2f> lines;
+        demo::findLines(im, lines);
+        demo::drawLines(im, lines);
+        vis_img = im;
+      };
+      break;
+      case 3:
+      {
+        aruco.Detect(im);
+        vis_img = im;
+      };
+      break;
+
+      default:
+      break;
+    }
+
     tt = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
     fps = 1 / tt;
 
@@ -206,7 +396,8 @@ int main(int argc, char **argv)
                 cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX, 1.3, cv::Scalar(0, 0, 255), 4);
 
     cv::imshow("PaddleLite", vis_img);
-    for (auto &item : im_result) {
+    for (auto &item : im_result)
+    {
       printf("label: %s, confidence: %.4f\n", plite.labels[item.class_id].c_str(), item.confidence);
       printf("left:%d, right:%d, top:%d, down:%d\n", item.rect[0], item.rect[1], item.rect[2], item.rect[3]);
     }
